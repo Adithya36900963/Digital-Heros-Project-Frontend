@@ -66,19 +66,32 @@ function AuthPanel({ onAuthed }) {
     email: 'user@digitalheroes.local',
     password: 'User123!'
   });
+  const [verification, setVerification] = useState(null);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
   async function submit(event) {
     event.preventDefault();
     setLoading(true);
     setError('');
+    setMessage('');
     try {
       const path = mode === 'login' ? '/auth/login' : '/auth/register';
       const body = mode === 'login'
         ? { email: form.email, password: form.password }
         : form;
       const data = await api(path, { method: 'POST', body: JSON.stringify(body) });
+      if (mode === 'register') {
+        setVerification({
+          email: form.email,
+          devToken: data.devVerificationToken,
+          skipped: data.verificationEmailSkipped
+        });
+        setMessage(data.message);
+        return;
+      }
+
       localStorage.setItem('dh_token', data.token);
       onAuthed(data.user);
     } catch (err) {
@@ -86,6 +99,81 @@ function AuthPanel({ onAuthed }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function verifyWithToken(token) {
+    setLoading(true);
+    setError('');
+    setMessage('');
+    try {
+      const data = await api('/auth/verify-email', {
+        method: 'POST',
+        body: JSON.stringify({ token })
+      });
+      localStorage.setItem('dh_token', data.token);
+      onAuthed(data.user);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function resendVerification() {
+    setLoading(true);
+    setError('');
+    setMessage('');
+    try {
+      const data = await api('/auth/resend-verification', {
+        method: 'POST',
+        body: JSON.stringify({ email: verification?.email || form.email })
+      });
+      setVerification({
+        email: verification?.email || form.email,
+        devToken: data.devVerificationToken,
+        skipped: data.verificationEmailSkipped
+      });
+      setMessage(data.message);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (verification) {
+    return (
+      <main className="auth-screen">
+        <section className="auth-copy">
+          <p className="eyebrow">Verify Email</p>
+          <h1>One quick check before the dashboard.</h1>
+          <p>We sent a verification link to {verification.email}. Confirm it to unlock subscription, score, charity, and draw access.</p>
+          <img src={impactImages[2]} alt="People working together on a community table" />
+        </section>
+        <section className="auth-form panel">
+          <p className="eyebrow">Email Verification</p>
+          <h2>Check your inbox</h2>
+          <p>The verification link expires in 24 hours.</p>
+          {verification.devToken && (
+            <div className="dev-token">
+              <p className="eyebrow">Local Dev Token</p>
+              <code>{verification.devToken}</code>
+              <button className="primary" onClick={() => verifyWithToken(verification.devToken)} disabled={loading}>
+                Verify with dev token
+              </button>
+            </div>
+          )}
+          <button className="ghost" onClick={resendVerification} disabled={loading}>Resend verification email</button>
+          <button className="ghost" onClick={() => {
+            setVerification(null);
+            setMode('login');
+          }}>
+            Back to login
+          </button>
+          <Notice error={error} message={message} />
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -120,7 +208,7 @@ function AuthPanel({ onAuthed }) {
           <input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
         </label>
         <button className="primary" disabled={loading}>{loading ? 'Working...' : mode === 'login' ? 'Enter dashboard' : 'Create account'}</button>
-        <Notice error={error} />
+        <Notice error={error} message={message} />
         <p className="hint">Seed user: user@digitalheroes.local / User123!</p>
         <p className="hint">Seed admin: admin@digitalheroes.local / Admin123!</p>
       </form>
@@ -194,12 +282,22 @@ function Subscription({ dashboard, refresh }) {
   const [selectedPlan, setSelectedPlan] = useState('monthly');
   const [checkout, setCheckout] = useState(null);
   const [qrImage, setQrImage] = useState('');
+  const [payments, setPayments] = useState([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [paying, setPaying] = useState(false);
   const subscription = dashboard?.subscription;
   const profile = dashboard?.profile;
+
+  async function loadPayments() {
+    const data = await api('/subscriptions/payments');
+    setPayments(data.payments || []);
+  }
+
+  useEffect(() => {
+    loadPayments().catch((err) => setError(err.message));
+  }, []);
 
   async function createQr(plan) {
     setLoading(true);
@@ -287,6 +385,7 @@ function Subscription({ dashboard, refresh }) {
           });
           setMessage('Razorpay payment verified. Subscription activated.');
           await refresh();
+          await loadPayments();
         },
         modal: {
           ondismiss: () => setPaying(false)
@@ -299,6 +398,7 @@ function Subscription({ dashboard, refresh }) {
         setPaying(false);
       });
       instance.open();
+      await loadPayments();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -350,6 +450,22 @@ function Subscription({ dashboard, refresh }) {
             <p>Monthly and yearly subscription QR codes will appear here.</p>
           </div>
         )}
+      </article>
+      <article className="panel payment-history">
+        <p className="eyebrow">Payment Verification</p>
+        <h2>Payment history</h2>
+        <div className="list compact">
+          {payments.map((payment) => (
+            <div className="payment-row" key={payment._id}>
+              <div>
+                <strong>{payment.plan} subscription</strong>
+                <p>{payment.provider} · {payment.status}</p>
+              </div>
+              <span>{money(payment.amount, payment.currency)}</span>
+            </div>
+          ))}
+          {!payments.length && <p>No payment attempts yet.</p>}
+        </div>
       </article>
     </section>
   );
@@ -635,6 +751,54 @@ function Admin() {
   );
 }
 
+function VerifyEmailPage({ onVerified }) {
+  const [status, setStatus] = useState('Verifying your email...');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    async function verifyFromUrl() {
+      const token = new URLSearchParams(window.location.search).get('token');
+      if (!token) {
+        setError('Verification token is missing from this link.');
+        setStatus('');
+        return;
+      }
+
+      try {
+        const data = await api('/auth/verify-email', {
+          method: 'POST',
+          body: JSON.stringify({ token })
+        });
+        localStorage.setItem('dh_token', data.token);
+        window.history.replaceState({}, '', window.location.pathname);
+        setStatus('Email verified. Opening your dashboard...');
+        await onVerified(data.user);
+      } catch (err) {
+        setError(err.message);
+        setStatus('');
+      }
+    }
+
+    verifyFromUrl();
+  }, []);
+
+  return (
+    <main className="auth-screen">
+      <section className="auth-copy">
+        <p className="eyebrow">Email Verification</p>
+        <h1>Confirming your account.</h1>
+        <p>Once verified, you can manage your subscription, submit scores, and join the monthly draw.</p>
+        <img src={impactImages[2]} alt="People working together on a community table" />
+      </section>
+      <section className="auth-form panel">
+        <h2>{status || 'Verification needs attention'}</h2>
+        <Notice error={error} />
+        <button className="ghost" onClick={() => window.location.assign('/')}>Back to login</button>
+      </section>
+    </main>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [dashboard, setDashboard] = useState(null);
@@ -696,6 +860,7 @@ export default function App() {
   }, [active, dashboard, isAdmin]);
 
   if (loading) return <main className="loading">Loading Digital Heroes...</main>;
+  if (window.location.pathname === '/verify-email') return <VerifyEmailPage onVerified={afterAuth} />;
   if (!user) return <AuthPanel onAuthed={afterAuth} />;
 
   return (

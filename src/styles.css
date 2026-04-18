@@ -345,6 +345,35 @@ nav button.active,
   font-weight: 900;
 }
 
+.payment-history {
+  grid-column: 1 / -1;
+}
+
+.list.compact {
+  gap: 8px;
+}
+
+.payment-row {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffefb;
+}
+
+.payment-row p {
+  margin-bottom: 0;
+}
+
+.payment-row span {
+  color: var(--forest);
+  font-weight: 800;
+}
+
 .charity-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -412,6 +441,26 @@ nav button.active,
 .hint {
   margin: 0;
   font-size: 0.88rem;
+}
+
+.dev-token {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffefb;
+}
+
+.dev-token code {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 10px;
+  border-radius: 8px;
+  background: #f2f1e9;
+  color: var(--forest);
+  font-size: 0.86rem;
 }
 
 .loading {
