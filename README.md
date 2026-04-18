@@ -1,21 +1,61 @@
-# Digital Heroes Frontend
+# Digital Heroes – Full Stack Project
 
-React and Vite frontend for the Digital Heroes backend.
+A full-stack donation platform built using **React (Vite)** for frontend and **Node.js, Express, and MongoDB** for backend. It supports donor registration, emergency blood requests, role-based dashboards, and Razorpay payment integration.
 
-## Run
+---
 
+## 🔗 Project Repositories
+
+- **Frontend:** https://github.com/Adithya36900963/Digital-Heroes-Project-Frontend  
+- **Backend:** https://github.com/Adithya36900963/Digital-Heroes-Project-Backend  
+
+---
+
+## 🛠️ Tech Stack
+
+### Frontend
+- React.js (Vite)
+- Axios
+- React Router
+
+### Backend
+- Node.js
+- Express.js
+- MongoDB
+- JWT Authentication
+- Razorpay Integration
+
+---
+
+## 🚀 Features
+
+- User registration and login (JWT authentication)
+- Role-based access control (Admin & User)
+- Blood donor registration and availability management
+- Emergency blood request system
+- Search & filter donors by blood group and location
+- Admin dashboard for managing users and requests
+- Secure payment integration using Razorpay
+
+---
+
+## ⚙️ Setup Instructions
+
+### 1. Clone Frontend
 ```bash
-cd C:\Users\adith\Desktop\digital-heroes-frontend
+git clone https://github.com/Adithya36900963/Digital-Heroes-Project-Frontend
+cd digital-heroes-frontend
 npm install
-copy .env.example .env
+
+### create .env and use .env.example variable and add data in it 
 npm run dev
-```
 
-The backend should be running at `http://localhost:5000`.
+### 2. Clone Backend
+```bash
+git clone https://github.com/Adithya36900963/Digital-Heroes-Project-Backend
+cd digital-heroes-backend
+npm install
 
-For Razorpay payments, set `VITE_RAZORPAY_KEY_ID` in the frontend `.env` and set `RAZORPAY_KEY_ID` plus `RAZORPAY_KEY_SECRET` in the backend `.env`.
+### create .env and use .env.example variable and add data in it 
+npm run dev
 
-Seeded accounts from the backend:
-
-- Admin: `admin@digitalheroes.local` / `Admin123!`
-- User: `user@digitalheroes.local` / `User123!`
