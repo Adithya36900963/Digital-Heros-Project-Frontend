@@ -209,8 +209,7 @@ function AuthPanel({ onAuthed }) {
         </label>
         <button className="primary" disabled={loading}>{loading ? 'Working...' : mode === 'login' ? 'Enter dashboard' : 'Create account'}</button>
         <Notice error={error} message={message} />
-        <p className="hint">Seed user: user@digitalheroes.local / User123!</p>
-        <p className="hint">Seed admin: admin@digitalheroes.local / Admin123!</p>
+        
       </form>
     </main>
   );
