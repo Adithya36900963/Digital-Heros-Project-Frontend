@@ -117,6 +117,36 @@ img {
   padding: 28px 0;
 }
 
+.public-page {
+  width: min(1180px, calc(100% - 28px));
+  margin: 0 auto;
+  padding: 26px 0 56px;
+  display: grid;
+  gap: 26px;
+}
+
+.public-hero {
+  min-height: 62vh;
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(320px, 1.05fr);
+  gap: 28px;
+  align-items: center;
+}
+
+.public-hero h1 {
+  max-width: 12ch;
+}
+
+.public-hero img {
+  height: clamp(280px, 46vw, 520px);
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+
+.section-heading {
+  margin-bottom: 14px;
+}
+
 .auth-copy {
   display: grid;
   gap: 18px;
@@ -163,6 +193,30 @@ nav {
   justify-content: flex-end;
 }
 
+.nav-link {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+  text-transform: capitalize;
+}
+
+.nav-link:hover {
+  border-color: var(--teal);
+}
+
+.nav-link.active {
+  background: var(--forest);
+  border-color: var(--forest);
+  color: white;
+}
+
 nav button,
 .split-tabs button {
   padding: 0 14px;
@@ -197,6 +251,10 @@ nav button.active,
 
 .grid.two {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .impact-panel {
@@ -259,6 +317,12 @@ nav button.active,
 }
 
 .toolbar {
+  margin-bottom: 16px;
+}
+
+.admin-form {
+  display: grid;
+  gap: 12px;
   margin-bottom: 16px;
 }
 
@@ -374,6 +438,22 @@ nav button.active,
   font-weight: 800;
 }
 
+.file-button {
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffefb;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.file-button input {
+  display: none;
+}
+
 .charity-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -473,7 +553,9 @@ nav button.active,
 
 @media (max-width: 880px) {
   .auth-screen,
+  .public-hero,
   .grid.two,
+  .grid.three,
   .topbar,
   .charity-grid,
   .plan-grid {

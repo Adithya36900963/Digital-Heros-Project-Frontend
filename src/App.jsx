@@ -1,5 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
+import {
+  NavLink,
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useNavigate,
+  useSearchParams
+} from 'react-router-dom';
 import { api } from './api/client.js';
 
 const impactImages = [
@@ -7,6 +16,20 @@ const impactImages = [
   'https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=900&q=80',
   'https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=900&q=80'
 ];
+
+const memberRoutes = [
+  { label: 'dashboard', to: '/dashboard', end: true },
+  { label: 'profile', to: '/dashboard/profile' },
+  { label: 'subscription', to: '/dashboard/subscription' },
+  { label: 'scores', to: '/dashboard/scores' },
+  { label: 'charities', to: '/dashboard/charities' },
+  { label: 'draws', to: '/dashboard/draws' },
+  { label: 'winners', to: '/dashboard/winners' }
+];
+
+function roleHomePath(user) {
+  return user?.role === 'admin' ? '/admin' : '/dashboard';
+}
 
 function money(value, currency = 'GBP') {
   return new Intl.NumberFormat(currency?.toLowerCase() === 'inr' ? 'en-IN' : 'en-GB', {
@@ -59,8 +82,8 @@ function Notice({ error, message }) {
   return <p className={error ? 'notice error' : 'notice'}>{error || message}</p>;
 }
 
-function AuthPanel({ onAuthed }) {
-  const [mode, setMode] = useState('login');
+function AuthPanel({ onAuthed, initialMode = 'login', onBack, onModeChange }) {
+  const [mode, setMode] = useState(initialMode);
   const [form, setForm] = useState({
     name: 'Sample Subscriber',
     email: 'user@digitalheroes.local',
@@ -70,6 +93,15 @@ function AuthPanel({ onAuthed }) {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setMode(initialMode);
+  }, [initialMode]);
+
+  function switchMode(nextMode) {
+    setMode(nextMode);
+    onModeChange?.(nextMode);
+  }
 
   async function submit(event) {
     event.preventDefault();
@@ -185,11 +217,12 @@ function AuthPanel({ onAuthed }) {
         <img src={impactImages[0]} alt="Community volunteers smiling together" />
       </section>
       <form className="auth-form panel" onSubmit={submit}>
+        {onBack && <button type="button" className="ghost" onClick={onBack}>Back to overview</button>}
         <div className="split-tabs">
-          <button type="button" className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>
+          <button type="button" className={mode === 'login' ? 'active' : ''} onClick={() => switchMode('login')}>
             Login
           </button>
-          <button type="button" className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')}>
+          <button type="button" className={mode === 'register' ? 'active' : ''} onClick={() => switchMode('register')}>
             Register
           </button>
         </div>
@@ -215,10 +248,82 @@ function AuthPanel({ onAuthed }) {
   );
 }
 
-function Shell({ user, onLogout, active, setActive }) {
+function PublicVisitor({ onLogin, onRegister }) {
+  const [charities, setCharities] = useState([]);
+  const [draws, setDraws] = useState([]);
+
+  useEffect(() => {
+    Promise.all([
+      api('/charities').then((data) => setCharities(data.charities || [])).catch(() => setCharities([])),
+      api('/draws').then((data) => setDraws(data.draws || [])).catch(() => setDraws([]))
+    ]);
+  }, []);
+
+  return (
+    <main className="public-page">
+      <section className="public-hero">
+        <div>
+          <p className="eyebrow">Digital Heroes</p>
+          <h1>Subscribe, score, support, win.</h1>
+          <p>Track your latest Stableford scores, help a charity you choose, and join monthly prize draws powered by verified subscription payments.</p>
+          <div className="button-row">
+            <button className="primary" onClick={onRegister}>Initiate subscription</button>
+            <button className="ghost" onClick={onLogin}>Login</button>
+          </div>
+        </div>
+        <img src={impactImages[0]} alt="Community volunteers smiling together" />
+      </section>
+
+      <section className="grid three">
+        <article className="panel">
+          <p className="eyebrow">Platform Concept</p>
+          <h2>Give every round more meaning</h2>
+          <p>Subscribers enter their five latest scores, pick a charity recipient, and stay entered for the monthly draw while part of each subscription fuels impact.</p>
+        </article>
+        <article className="panel">
+          <p className="eyebrow">Draw Mechanics</p>
+          <h2>5, 4, and 3 number matches</h2>
+          <p>Admins can simulate or publish random and algorithmic draws. Prize pools split by tier, and unclaimed jackpots roll into the next month.</p>
+        </article>
+        <article className="panel">
+          <p className="eyebrow">Payment</p>
+          <h2>Razorpay verified</h2>
+          <p>Subscription payments are verified before access is activated, with payment history visible inside the member dashboard.</p>
+        </article>
+      </section>
+
+      <section>
+        <div className="section-heading">
+          <p className="eyebrow">Explore Charities</p>
+          <h2>Choose where your contribution goes</h2>
+        </div>
+        <div className="charity-grid">
+          {charities.slice(0, 4).map((charity, index) => (
+            <article className="panel charity" key={charity._id}>
+              <img src={charity.imageUrls?.[0] || impactImages[index % impactImages.length]} alt={`${charity.name} charity`} />
+              <div>
+                <p className="eyebrow">{charity.category || 'Impact'}</p>
+                <h3>{charity.name}</h3>
+                <p>{charity.description}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <p className="eyebrow">Latest Draws</p>
+        <h2>{draws[0]?.winningNumbers?.length ? draws[0].winningNumbers.join(' · ') : 'Monthly draw results will appear here'}</h2>
+        <p>{draws[0] ? `${draws[0].month}/${draws[0].year} · ${draws[0].status}` : 'Create an account to subscribe and prepare your score entry.'}</p>
+      </section>
+    </main>
+  );
+}
+
+function Shell({ user, onLogout }) {
   const nav = user?.role === 'admin'
-    ? ['dashboard', 'subscription', 'scores', 'charities', 'draws', 'winners', 'admin']
-    : ['dashboard', 'subscription', 'scores', 'charities', 'draws', 'winners'];
+    ? [...memberRoutes, { label: 'admin', to: '/admin', end: true }]
+    : memberRoutes;
 
   return (
     <header className="topbar">
@@ -228,9 +333,14 @@ function Shell({ user, onLogout, active, setActive }) {
       </div>
       <nav>
         {nav.map((item) => (
-          <button key={item} className={active === item ? 'active' : ''} onClick={() => setActive(item)}>
-            {item}
-          </button>
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
+          >
+            {item.label}
+          </NavLink>
         ))}
       </nav>
       <button className="ghost" onClick={onLogout}>Logout</button>
@@ -470,6 +580,86 @@ function Subscription({ dashboard, refresh }) {
   );
 }
 
+function Profile({ dashboard, refresh }) {
+  const profile = dashboard?.profile || {};
+  const [charities, setCharities] = useState([]);
+  const [form, setForm] = useState({
+    name: profile.name || '',
+    phone: profile.phone || '',
+    country: profile.country || 'IN',
+    selectedCharity: profile.selectedCharity?._id || profile.selectedCharity || '',
+    charityContributionPercentage: profile.charityContributionPercentage || 10
+  });
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    api('/charities').then((data) => setCharities(data.charities || [])).catch((err) => setError(err.message));
+  }, []);
+
+  async function save(event) {
+    event.preventDefault();
+    setError('');
+    setMessage('');
+    try {
+      await api('/auth/me', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          ...form,
+          charityContributionPercentage: Number(form.charityContributionPercentage)
+        })
+      });
+      setMessage('Profile and charity recipient updated.');
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <section className="grid two">
+      <form className="panel" onSubmit={save}>
+        <p className="eyebrow">Profile & Settings</p>
+        <h2>Manage account</h2>
+        <label>
+          Name
+          <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+        </label>
+        <label>
+          Phone
+          <input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+        </label>
+        <label>
+          Country
+          <input value={form.country} onChange={(event) => setForm({ ...form, country: event.target.value })} />
+        </label>
+        <label>
+          Charity recipient
+          <select value={form.selectedCharity} onChange={(event) => setForm({ ...form, selectedCharity: event.target.value })}>
+            <option value="">Choose charity</option>
+            {charities.map((charity) => <option key={charity._id} value={charity._id}>{charity.name}</option>)}
+          </select>
+        </label>
+        <label>
+          Charity contribution %
+          <input type="number" min="10" max="100" value={form.charityContributionPercentage} onChange={(event) => setForm({ ...form, charityContributionPercentage: event.target.value })} />
+        </label>
+        <button className="primary">Save settings</button>
+        <Notice error={error} message={message} />
+      </form>
+      <article className="panel image-panel">
+        <img src={impactImages[2]} alt="People working together on a community table" />
+        <div>
+          <p className="eyebrow">Email</p>
+          <h2>{profile.isEmailVerified ? 'Verified' : 'Not verified'}</h2>
+          <p>{profile.email}</p>
+          <p>Verified users can subscribe, enter scores, upload winner proof, and participate in monthly draws.</p>
+        </div>
+      </article>
+    </section>
+  );
+}
+
 function Scores({ scores, refresh }) {
   const [form, setForm] = useState({ value: 30, playedAt: dateValue(new Date()), notes: '' });
   const [editingId, setEditingId] = useState('');
@@ -546,10 +736,12 @@ function Scores({ scores, refresh }) {
   );
 }
 
-function Charities() {
+function Charities({ isAdmin }) {
   const [charities, setCharities] = useState([]);
   const [query, setQuery] = useState('');
+  const [form, setForm] = useState({ name: '', slug: '', category: '', description: '', websiteUrl: '', isFeatured: false });
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
   async function load() {
     try {
@@ -564,13 +756,66 @@ function Charities() {
     load();
   }, []);
 
+  async function saveCharity(event) {
+    event.preventDefault();
+    setError('');
+    setMessage('');
+    try {
+      await api('/charities', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...form,
+          slug: form.slug || form.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+          imageUrls: [],
+          isActive: true
+        })
+      });
+      setForm({ name: '', slug: '', category: '', description: '', websiteUrl: '', isFeatured: false });
+      setMessage('Charity listing added.');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function deleteCharity(id) {
+    setError('');
+    setMessage('');
+    try {
+      await api(`/charities/${id}`, { method: 'DELETE' });
+      setMessage('Charity listing removed.');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   return (
     <section>
+      {isAdmin && (
+        <form className="panel admin-form" onSubmit={saveCharity}>
+          <p className="eyebrow">Charity Management</p>
+          <h2>Add charity listing</h2>
+          <div className="inline-fields">
+            <input placeholder="Name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+            <input placeholder="Slug" value={form.slug} onChange={(event) => setForm({ ...form, slug: event.target.value })} />
+          </div>
+          <div className="inline-fields">
+            <input placeholder="Category" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} />
+            <input placeholder="Website URL" value={form.websiteUrl} onChange={(event) => setForm({ ...form, websiteUrl: event.target.value })} />
+          </div>
+          <label>
+            Description
+            <input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
+          </label>
+          <button className="primary">Add charity</button>
+        </form>
+      )}
       <div className="toolbar">
         <input placeholder="Search charities" value={query} onChange={(event) => setQuery(event.target.value)} />
         <button className="primary small" onClick={load}>Search</button>
       </div>
-      <Notice error={error} />
+      <Notice error={error} message={message} />
       <div className="charity-grid">
         {charities.map((charity, index) => (
           <article className="panel charity" key={charity._id}>
@@ -580,6 +825,7 @@ function Charities() {
               <h3>{charity.name}</h3>
               <p>{charity.description}</p>
               <strong>{money(charity.totalContributed)} contributed</strong>
+              {isAdmin && <button className="ghost danger small" onClick={() => deleteCharity(charity._id)}>Remove listing</button>}
             </div>
           </article>
         ))}
@@ -657,6 +903,7 @@ function Draws({ isAdmin }) {
 function Winners({ isAdmin }) {
   const [winners, setWinners] = useState([]);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
   async function load() {
     const data = await api(isAdmin ? '/winners' : '/winners/me');
@@ -673,13 +920,28 @@ function Winners({ isAdmin }) {
     await load();
   }
 
+  async function uploadProof(id, file) {
+    if (!file) return;
+    setError('');
+    setMessage('');
+    try {
+      const body = new FormData();
+      body.append('proof', file);
+      await api(`/winners/${id}/proof`, { method: 'POST', body });
+      setMessage('Winner proof uploaded for admin review.');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   useEffect(() => {
     load().catch((err) => setError(err.message));
   }, [isAdmin]);
 
   return (
     <section>
-      <Notice error={error} />
+      <Notice error={error} message={message} />
       <div className="list">
         {winners.map((winner) => (
           <article className="panel list-row" key={winner._id}>
@@ -695,6 +957,14 @@ function Winners({ isAdmin }) {
                 <button className="primary small" onClick={() => paid(winner._id)}>Paid</button>
               </div>
             )}
+            {!isAdmin && (
+              <div className="row-actions">
+                <label className="file-button">
+                  Upload proof
+                  <input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" onChange={(event) => uploadProof(winner._id, event.target.files?.[0])} />
+                </label>
+              </div>
+            )}
           </article>
         ))}
         {!winners.length && <article className="panel"><h3>No winner records yet.</h3><p>Published draws will appear here when entries match.</p></article>}
@@ -706,15 +976,31 @@ function Winners({ isAdmin }) {
 function Admin() {
   const [analytics, setAnalytics] = useState(null);
   const [users, setUsers] = useState([]);
+  const [subscriptions, setSubscriptions] = useState([]);
   const [error, setError] = useState('');
 
   async function load() {
-    const [analyticsData, usersData] = await Promise.all([
+    const [analyticsData, usersData, subscriptionsData] = await Promise.all([
       api('/admin/analytics'),
-      api('/admin/users')
+      api('/admin/users'),
+      api('/admin/subscriptions')
     ]);
     setAnalytics(analyticsData.analytics);
     setUsers(usersData.users || []);
+    setSubscriptions(subscriptionsData.subscriptions || []);
+  }
+
+  async function setSubscriptionStatus(id, status) {
+    setError('');
+    try {
+      await api(`/admin/subscriptions/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status })
+      });
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   useEffect(() => {
@@ -736,6 +1022,30 @@ function Admin() {
       </article>
       <div className="list wide">
         <Notice error={error} />
+        <article className="panel">
+          <p className="eyebrow">Subscription Management</p>
+          <h2>Manage subscriptions</h2>
+          <div className="list compact">
+            {subscriptions.map((subscription) => (
+              <div className="payment-row" key={subscription._id}>
+                <div>
+                  <strong>{subscription.user?.email || 'Unknown user'}</strong>
+                  <p>{subscription.plan} · {subscription.status} · {money(subscription.amount, subscription.currency)}</p>
+                </div>
+                <div className="row-actions">
+                  <button className="ghost small" onClick={() => setSubscriptionStatus(subscription._id, 'active')}>Active</button>
+                  <button className="ghost small" onClick={() => setSubscriptionStatus(subscription._id, 'cancelled')}>Cancel</button>
+                  <button className="ghost small" onClick={() => setSubscriptionStatus(subscription._id, 'lapsed')}>Lapse</button>
+                </div>
+              </div>
+            ))}
+            {!subscriptions.length && <p>No subscriptions yet.</p>}
+          </div>
+        </article>
+        <article className="panel">
+          <p className="eyebrow">User Management</p>
+          <h2>Manage users</h2>
+        </article>
         {users.map((item) => (
           <article className="panel list-row" key={item._id}>
             <div>
@@ -751,12 +1061,14 @@ function Admin() {
 }
 
 function VerifyEmailPage({ onVerified }) {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [status, setStatus] = useState('Verifying your email...');
   const [error, setError] = useState('');
 
   useEffect(() => {
     async function verifyFromUrl() {
-      const token = new URLSearchParams(window.location.search).get('token');
+      const token = searchParams.get('token');
       if (!token) {
         setError('Verification token is missing from this link.');
         setStatus('');
@@ -769,9 +1081,9 @@ function VerifyEmailPage({ onVerified }) {
           body: JSON.stringify({ token })
         });
         localStorage.setItem('dh_token', data.token);
-        window.history.replaceState({}, '', window.location.pathname);
         setStatus('Email verified. Opening your dashboard...');
         await onVerified(data.user);
+        navigate(roleHomePath(data.user), { replace: true });
       } catch (err) {
         setError(err.message);
         setStatus('');
@@ -779,7 +1091,7 @@ function VerifyEmailPage({ onVerified }) {
     }
 
     verifyFromUrl();
-  }, []);
+  }, [navigate, searchParams]);
 
   return (
     <main className="auth-screen">
@@ -792,16 +1104,77 @@ function VerifyEmailPage({ onVerified }) {
       <section className="auth-form panel">
         <h2>{status || 'Verification needs attention'}</h2>
         <Notice error={error} />
-        <button className="ghost" onClick={() => window.location.assign('/')}>Back to login</button>
+        <button className="ghost" onClick={() => navigate('/login')}>Back to login</button>
       </section>
     </main>
+  );
+}
+
+function RootRedirect({ user }) {
+  return <Navigate to={user ? roleHomePath(user) : '/visitors'} replace />;
+}
+
+function PublicOnlyRoute({ user }) {
+  return user ? <Navigate to={roleHomePath(user)} replace /> : <Outlet />;
+}
+
+function ProtectedRoute({ user }) {
+  return user ? <Outlet /> : <Navigate to="/visitors" replace />;
+}
+
+function AdminOnlyRoute({ user }) {
+  return user?.role === 'admin' ? <Outlet /> : <Navigate to="/dashboard" replace />;
+}
+
+function VisitorRoute() {
+  const navigate = useNavigate();
+
+  return (
+    <PublicVisitor
+      onLogin={() => navigate('/login')}
+      onRegister={() => navigate('/register')}
+    />
+  );
+}
+
+function AuthRoute({ initialMode, onAuthed }) {
+  const navigate = useNavigate();
+
+  return (
+    <AuthPanel
+      onAuthed={onAuthed}
+      initialMode={initialMode}
+      onBack={() => navigate('/visitors')}
+      onModeChange={(nextMode) => navigate(nextMode === 'login' ? '/login' : '/register')}
+    />
+  );
+}
+
+function MemberLayout({ user, onLogout, error }) {
+  return (
+    <div className="app">
+      <Shell user={user} onLogout={onLogout} />
+      <Notice error={error} />
+      <Outlet />
+    </div>
+  );
+}
+
+function DashboardHomeRoute({ dashboard, refresh }) {
+  const navigate = useNavigate();
+
+  return (
+    <Dashboard
+      dashboard={dashboard}
+      refresh={refresh}
+      openSubscription={() => navigate('/dashboard/subscription')}
+    />
   );
 }
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [dashboard, setDashboard] = useState(null);
-  const [active, setActive] = useState('dashboard');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -833,6 +1206,7 @@ export default function App() {
   }, []);
 
   async function afterAuth(nextUser) {
+    setError('');
     setUser(nextUser);
     try {
       await loadDashboard();
@@ -845,28 +1219,38 @@ export default function App() {
     localStorage.removeItem('dh_token');
     setUser(null);
     setDashboard(null);
-    setActive('dashboard');
   }
 
-  const content = useMemo(() => {
-    if (active === 'subscription') return <Subscription dashboard={dashboard} refresh={loadDashboard} />;
-    if (active === 'scores') return <Scores scores={dashboard?.scores} refresh={loadDashboard} />;
-    if (active === 'charities') return <Charities />;
-    if (active === 'draws') return <Draws isAdmin={isAdmin} />;
-    if (active === 'winners') return <Winners isAdmin={isAdmin} />;
-    if (active === 'admin') return <Admin />;
-    return <Dashboard dashboard={dashboard} refresh={loadDashboard} openSubscription={() => setActive('subscription')} />;
-  }, [active, dashboard, isAdmin]);
-
   if (loading) return <main className="loading">Loading Digital Heroes...</main>;
-  if (window.location.pathname === '/verify-email') return <VerifyEmailPage onVerified={afterAuth} />;
-  if (!user) return <AuthPanel onAuthed={afterAuth} />;
 
   return (
-    <div className="app">
-      <Shell user={user} onLogout={logout} active={active} setActive={setActive} />
-      <Notice error={error} />
-      {content}
-    </div>
+    <Routes>
+      <Route path="/" element={<RootRedirect user={user} />} />
+      <Route path="/verify-email" element={<VerifyEmailPage onVerified={afterAuth} />} />
+
+      <Route element={<PublicOnlyRoute user={user} />}>
+        <Route path="/visitors" element={<VisitorRoute />} />
+        <Route path="/login" element={<AuthRoute initialMode="login" onAuthed={afterAuth} />} />
+        <Route path="/register" element={<AuthRoute initialMode="register" onAuthed={afterAuth} />} />
+      </Route>
+
+      <Route element={<ProtectedRoute user={user} />}>
+        <Route element={<MemberLayout user={user} onLogout={logout} error={error} />}>
+          <Route path="/dashboard" element={<DashboardHomeRoute dashboard={dashboard} refresh={loadDashboard} />} />
+          <Route path="/dashboard/profile" element={<Profile dashboard={dashboard} refresh={loadDashboard} />} />
+          <Route path="/dashboard/subscription" element={<Subscription dashboard={dashboard} refresh={loadDashboard} />} />
+          <Route path="/dashboard/scores" element={<Scores scores={dashboard?.scores} refresh={loadDashboard} />} />
+          <Route path="/dashboard/charities" element={<Charities isAdmin={isAdmin} />} />
+          <Route path="/dashboard/draws" element={<Draws isAdmin={isAdmin} />} />
+          <Route path="/dashboard/winners" element={<Winners isAdmin={isAdmin} />} />
+
+          <Route element={<AdminOnlyRoute user={user} />}>
+            <Route path="/admin" element={<Admin />} />
+          </Route>
+        </Route>
+      </Route>
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
