@@ -296,6 +296,49 @@ nav button.active,
   gap: 16px;
 }
 
+.winner-summary {
+  display: grid;
+  gap: 4px;
+}
+
+.winner-proof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.winner-empty {
+  display: grid;
+  gap: 18px;
+}
+
+.winner-preview-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.winner-preview-card {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(0, 121, 107, 0.04);
+}
+
+.winner-footnote {
+  max-width: 72ch;
+  color: var(--muted);
+}
+
+.winner-callout {
+  padding: 12px 14px;
+  border: 1px solid #ead9a7;
+  border-radius: 14px;
+  background: #fff8de;
+  color: #6b5713;
+}
+
 .row-actions,
 .button-row,
 .toolbar,
@@ -487,6 +530,14 @@ nav button.active,
 .ghost {
   padding: 0 14px;
   background: #fffefb;
+}
+
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  text-decoration: none;
 }
 
 .danger {

@@ -9,7 +9,7 @@ import {
   useNavigate,
   useSearchParams
 } from 'react-router-dom';
-import { api } from './api/client.js';
+import { api, assetUrl } from './api/client.js';
 
 const impactImages = [
   'https://images.unsplash.com/photo-1491438590914-bc09fcaaf77a?auto=format&fit=crop&w=900&q=80',
@@ -75,6 +75,24 @@ function loadRazorpayScript() {
 function dateValue(date) {
   if (!date) return '';
   return new Date(date).toISOString().slice(0, 10);
+}
+
+function prettyStatus(value) {
+  return String(value || '').replace(/_/g, ' ');
+}
+
+function drawLabel(draw) {
+  if (!draw?.month || !draw?.year) return 'Draw details unavailable';
+  return `${draw.month}/${draw.year}`;
+}
+
+function joinNumbers(values) {
+  return values?.length ? values.join(' · ') : 'No numbers yet';
+}
+
+function matchedNumbers(values, winningNumbers) {
+  const winningSet = new Set(winningNumbers || []);
+  return [...new Set((values || []).filter((value) => winningSet.has(value)))];
 }
 
 function Notice({ error, message }) {
@@ -376,7 +394,7 @@ function Dashboard({ dashboard, refresh, openSubscription }) {
       <article className="panel">
         <p className="eyebrow">Scores Ready</p>
         <h2>{dashboard?.scores?.length || 0}/5</h2>
-        <p>Your draw entry uses the five latest score dates.</p>
+        <p>Each published draw uses the five latest scores on file at publish time.</p>
       </article>
       <article className="panel">
         <p className="eyebrow">Winnings</p>
@@ -967,7 +985,179 @@ function Winners({ isAdmin }) {
             )}
           </article>
         ))}
-        {!winners.length && <article className="panel"><h3>No winner records yet.</h3><p>Published draws will appear here when entries match.</p></article>}
+        {!winners.length && (
+          <article className="panel">
+            <h3>No winner records yet.</h3>
+            <p>Published draws will appear here when your entry matches the draw.</p>
+            <p>Proof upload is only shown after a published draw creates a winner record for your account.</p>
+          </article>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function WinnerRecords({ isAdmin, dashboard }) {
+  const [winners, setWinners] = useState([]);
+  const [latestPublishedDraw, setLatestPublishedDraw] = useState(null);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+
+  async function load() {
+    const data = await api(isAdmin ? '/winners' : '/winners/me');
+    setWinners(data.winners || []);
+
+    if (isAdmin) return;
+
+    const drawData = await api('/draws');
+    setLatestPublishedDraw((drawData.draws || []).find((draw) => draw.status === 'published') || null);
+  }
+
+  async function review(id, status) {
+    await api(`/winners/${id}/review`, { method: 'PATCH', body: JSON.stringify({ status }) });
+    await load();
+  }
+
+  async function paid(id) {
+    await api(`/winners/${id}/paid`, { method: 'PATCH' });
+    await load();
+  }
+
+  async function uploadProof(id, file) {
+    if (!file) return;
+    setError('');
+    setMessage('');
+    try {
+      const body = new FormData();
+      body.append('proof', file);
+      await api(`/winners/${id}/proof`, { method: 'POST', body });
+      setMessage('Winner proof uploaded for admin review.');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  useEffect(() => {
+    load().catch((err) => setError(err.message));
+  }, [isAdmin]);
+
+  const currentScoreValues = (dashboard?.scores || []).slice(0, 5).map((score) => score.value);
+  const currentMatchedNumbers = matchedNumbers(currentScoreValues, latestPublishedDraw?.winningNumbers);
+  const subscriptionStatus = prettyStatus(dashboard?.subscription?.status || 'inactive');
+  const currentMatchLabel = currentMatchedNumbers.length >= 3
+    ? `${currentMatchedNumbers.length}-match with your current scores`
+    : `${currentMatchedNumbers.length}/5 numbers match right now`;
+  const latestScoreChangeAt = Math.max(
+    0,
+    ...(dashboard?.scores || [])
+      .slice(0, 5)
+      .map((score) => Date.parse(score.updatedAt || score.createdAt || score.playedAt))
+      .filter(Number.isFinite)
+  );
+  const publishedAt = Date.parse(latestPublishedDraw?.publishedAt || latestPublishedDraw?.updatedAt || '');
+  const currentMatchChangedAfterPublish = Boolean(
+    latestPublishedDraw &&
+    currentMatchedNumbers.length >= 3 &&
+    latestScoreChangeAt &&
+    publishedAt &&
+    latestScoreChangeAt > publishedAt
+  );
+
+  return (
+    <section>
+      <Notice error={error} message={message} />
+      <div className="list">
+        {winners.map((winner) => (
+          <article className="panel list-row" key={winner._id}>
+            <div className="winner-summary">
+              <p className="eyebrow">{winner.matchType} · {prettyStatus(winner.verificationStatus)}</p>
+              <h3>{money(winner.prizeAmount)}</h3>
+              <p>{winner.user?.email || 'Your prize'} · payment {prettyStatus(winner.paymentStatus)}</p>
+              <p>
+                {drawLabel(winner.draw)}
+                {winner.draw?.winningNumbers?.length ? ` · draw ${winner.draw.winningNumbers.join(' · ')}` : ''}
+              </p>
+              <p>{winner.matchedNumbers?.length ? `Matched: ${winner.matchedNumbers.join(' · ')}` : 'No matched numbers recorded.'}</p>
+              <div className="winner-proof">
+                {winner.proof?.url ? (
+                  <>
+                    <a
+                      className="ghost small link-button"
+                      href={assetUrl(winner.proof.url)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      View proof
+                    </a>
+                    <span>{winner.proof.uploadedAt ? `Uploaded ${new Date(winner.proof.uploadedAt).toLocaleString()}` : 'Proof uploaded'}</span>
+                  </>
+                ) : (
+                  <span>No proof uploaded yet.</span>
+                )}
+              </div>
+              {winner.verificationNote && <p>Review note: {winner.verificationNote}</p>}
+            </div>
+            {isAdmin && (
+              <div className="row-actions">
+                <button className="ghost" onClick={() => review(winner._id, 'approved')} disabled={!winner.proof?.url}>Approve</button>
+                <button className="ghost danger" onClick={() => review(winner._id, 'rejected')} disabled={!winner.proof?.url}>Reject</button>
+                <button className="primary small" onClick={() => paid(winner._id)} disabled={winner.verificationStatus !== 'approved'}>Paid</button>
+              </div>
+            )}
+            {!isAdmin && (
+              <div className="row-actions">
+                <label className="file-button">
+                  {winner.proof?.url ? 'Replace proof' : 'Upload proof'}
+                  <input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" onChange={(event) => uploadProof(winner._id, event.target.files?.[0])} />
+                </label>
+              </div>
+            )}
+          </article>
+        ))}
+        {!winners.length && (
+          <article className="panel winner-empty">
+            <div>
+              <p className="eyebrow">Winner Status</p>
+              <h3>No winner records yet.</h3>
+              <p>Published draws appear here only after the system creates a winner record for your account.</p>
+            </div>
+            {!isAdmin && (
+              <>
+                <div className="winner-preview-grid">
+                  <div className="winner-preview-card">
+                    <p className="eyebrow">Eligibility</p>
+                    <h4>{subscriptionStatus}</h4>
+                    <p>{currentScoreValues.length}/5 latest scores on file</p>
+                  </div>
+                  <div className="winner-preview-card">
+                    <p className="eyebrow">Latest Published Draw</p>
+                    <h4>{latestPublishedDraw ? drawLabel(latestPublishedDraw) : 'Awaiting first draw'}</h4>
+                    <p>{latestPublishedDraw ? joinNumbers(latestPublishedDraw.winningNumbers) : 'No published draw is available to compare yet.'}</p>
+                    {latestPublishedDraw?.publishedAt && <p>Published {new Date(latestPublishedDraw.publishedAt).toLocaleString()}</p>}
+                  </div>
+                  <div className="winner-preview-card">
+                    <p className="eyebrow">Current Score Check</p>
+                    <h4>{latestPublishedDraw ? currentMatchLabel : 'Comparison unavailable'}</h4>
+                    <p>{currentScoreValues.length ? joinNumbers(currentScoreValues) : 'Add five scores to compare them here.'}</p>
+                    <p>{currentMatchedNumbers.length ? `Matched now: ${joinNumbers(currentMatchedNumbers)}` : 'No current winning tier is shown for this draw.'}</p>
+                    {latestScoreChangeAt > 0 && <p>Latest score change {new Date(latestScoreChangeAt).toLocaleString()}</p>}
+                  </div>
+                </div>
+                {currentMatchChangedAfterPublish ? (
+                  <p className="winner-footnote winner-callout">
+                    Your current match was formed after this draw was published, so the system does not backfill a winner record for this older published draw.
+                  </p>
+                ) : (
+                  <p className="winner-footnote">
+                    Winner records are created when a draw is published using the five latest scores on file at that moment.
+                    Score edits made later do not retroactively create a winner record for an older published draw.
+                  </p>
+                )}
+              </>
+            )}
+          </article>
+        )}
       </div>
     </section>
   );
@@ -1242,7 +1432,7 @@ export default function App() {
           <Route path="/dashboard/scores" element={<Scores scores={dashboard?.scores} refresh={loadDashboard} />} />
           <Route path="/dashboard/charities" element={<Charities isAdmin={isAdmin} />} />
           <Route path="/dashboard/draws" element={<Draws isAdmin={isAdmin} />} />
-          <Route path="/dashboard/winners" element={<Winners isAdmin={isAdmin} />} />
+          <Route path="/dashboard/winners" element={<WinnerRecords isAdmin={isAdmin} dashboard={dashboard} />} />
 
           <Route element={<AdminOnlyRoute user={user} />}>
             <Route path="/admin" element={<Admin />} />

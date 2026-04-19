@@ -32,3 +32,14 @@ export async function api(path, options = {}) {
 
   return data;
 }
+
+export function assetUrl(path) {
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) return path;
+
+  const base = /^https?:\/\//i.test(API_URL)
+    ? new URL(API_URL)
+    : new URL(API_URL, window.location.origin);
+
+  return new URL(path, `${base.origin}/`).toString();
+}
